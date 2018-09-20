@@ -1,5 +1,6 @@
 #define TEMP1 4
 #define CORRENTE_PORTA 1
+#define TEMPO_PROCESSAMENTO 10000
 
 #include <OneWire.h>
 #include <EmonLib.h>
@@ -8,8 +9,11 @@
 
 OneWire  dsTemp1(TEMP1);
 EnergyMonitor emon1;
-File arq;
+File arq_corrente;
+File arq_temepraura;
 
+void contador();
+void inicializacao_SD();
 void leitura();
 float lerTemp1();
 float conversao(int16_t raw, byte data[], byte type_s);
@@ -18,66 +22,88 @@ byte chip(byte addr);
 double Irms;
 int rede = 220.0;
 float temp;
+bool chave = false;
 
 void setup()
 {
 	EEPROM.write(0,0);
-	byte x = EEPROM.read(0);
-	if(x==255)
-		x=0;
-	String titulo = "dados";
-	titulo += x;
-	titulo += ".txt"
-	EEPROM.write(0, x+1);
+	
+	SD.begin(10);
+
+	//inicializacao_SD();
+	
 	Serial.begin(9600);
 
 	emon1.current(CORRENTE_PORTA, 27);
-
-	SD.begin(10);
-
-	arq = SD.open(titulo, FILE_WRITE);
-
-	if(arq) {
-		arq.println("Teste de arquivos TXT em SD no Arduino");
-		Serial.println("OK.");
-	}
-	else 
-		Serial.println("Erro ao abrir ou criar o arquivo texto.txt.");
-
 }
 /*
 falta:
 led piscando quando estiver em funcionamento
-implementação da funcionaliade do dispositivo mesmo sem o sensor de temperatura
-impressao em dois arquivos diferentes do SD
 leds piscando diferente a apartir do tipo de funcionamento dele
-definição do tempo de leitura
 botao para iniciar
-nao é necessario implementação da potencia nesse caso, pois é uma constante e o excel resolve isso facin facin
-
 
 */
 void loop()
 {
 	leitura();
+	
+	if(!digitalRead(but))   t_but = 0x01;
+	if(digitalRead(but) && t_but) {
+		t_but = 0x00;
+		chave = !chave;
+		if(chave)
+			inicializacao_SD();
+	}	
 
-	while(millis()-time1 < TEMPO_PROCESSAMENTO)
-		delay(1);
-	if(DEBUG_TEMPO)
+	if(chave)
 	{
-		resp1 = millis() - time1;
-		if(DEBUG_SERIAL)
-		{
-			Serial.print("> Temp Loop Final: ");
-			Serial.println(resp1);
-		}
-		if(MICROSD)
-		{
-			arq.print("> Temp Loop Final: ");
-			arq.println(resp1);
-		}
-		//lcd.print(resp1);
+		arq_corrente.println(Irms);
+		arq_temperatura.println(temp);
 	}
+
+	while(millis()-time < TEMPO_PROCESSAMENTO)
+		delay(1);
+
+	time = millis();
+
+}
+
+void contador()
+{
+	byte x = EEPROM.read(0);
+	if(x==255)
+		x=0;
+	EEPROM.write(0, x+1);
+}
+
+void inicializacao_SD()
+{	
+	byte x = contador();
+
+	String titulo1 = "Corrente";
+	titulo1 += x;
+	titulo1 += ".txt"
+	String titulo2 = "Temperatura";
+	titulo2 += x;
+	titulo2 += ".txt"
+
+	arq_corrente = SD.open(titulo1, FILE_WRITE);
+	arq_temperatura = SD.open(titulo2, FILE_WRITE);
+
+	if(arq_corrente) {
+		arq_corrente.println("Teste de arquivos TXT em SD no Arduino");
+		Serial.println("OK.");
+	}
+	else 
+		Serial.println("Erro ao abrir ou criar o arquivo texto.txt.");
+
+
+	if(arq_temperatura) {
+		arq_temperatura.println("Teste de arquivos TXT em SD no Arduino");
+		Serial.println("OK.");
+	}
+	else 
+		Serial.println("Erro ao abrir ou criar o arquivo texto.txt.");
 }
 
 void leitura()
